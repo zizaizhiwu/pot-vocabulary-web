@@ -1,7 +1,13 @@
 <template>
   <main class="page">
     <div class="topbar">
-      <button class="back" @click="router.push('/')">← 返回列表</button>
+      <div class="topbar-left">
+        <button class="back" @click="router.push('/')">← 返回列表</button>
+        <span v-if="topic" class="topbar-pager">
+          <button class="pager-btn" :disabled="!prevAvailable" @click="go('prev')">← 上一个</button>
+          <button class="pager-btn" :disabled="!nextAvailable" @click="go('next')">下一个 →</button>
+        </span>
+      </div>
       <div v-if="topic" class="topbar-actions">
         <button class="collect-btn" @click="pickerOpen = true">收藏到…</button>
         <MoveMenu
@@ -21,63 +27,105 @@
     </div>
 
     <template v-else-if="topic">
-      <section class="detail-card">
-        <h1 class="word">{{ topic.sourceText }}</h1>
-        <div class="meta">
-          <span v-for="c in topic.collections" :key="c.id" class="badge">{{ c.name }}</span>
-          <span v-if="!topic.collections.length" class="badge none">未收藏</span>
-          <span v-if="topic.sourceLang || topic.targetLang" class="badge">
-            {{ topic.sourceLang || '?' }} → {{ topic.targetLang || '?' }}
-          </span>
-          <span class="badge">{{ topic.resultCount }} 条翻译</span>
-          <span class="time">收藏于 {{ topic.createdAt }}</span>
-        </div>
-      </section>
+      <div class="detail-layout">
+        <div class="detail-main">
+          <section class="detail-card">
+            <h1 class="word">{{ topic.sourceText }}</h1>
+            <div class="meta">
+              <span v-for="c in topic.collections" :key="c.id" class="badge">{{ c.name }}</span>
+              <span v-if="!topic.collections.length" class="badge none">未收藏</span>
+              <span v-if="topic.sourceLang || topic.targetLang" class="badge">
+                {{ topic.sourceLang || '?' }} → {{ topic.targetLang || '?' }}
+              </span>
+              <span class="badge">{{ topic.resultCount }} 条翻译</span>
+              <span class="time">收藏于 {{ topic.createdAt }}</span>
+            </div>
+          </section>
 
-      <div v-if="topic.results.length" class="blur-toggle">
-        <button class="link-btn" @click="toggleAll">
-          {{ allRevealed ? '隐藏全部翻译' : '显示全部翻译' }}
-        </button>
-      </div>
-
-      <section v-if="topic.results.length" class="results">
-        <article v-for="item in topic.results" :key="item.id" class="result-card">
-          <header>
-            <span v-if="item.provider" class="provider">{{ item.provider }}</span>
-            <span v-else class="provider-fallback">翻译结果</span>
-            <span class="time">{{ item.updatedAt }}</span>
-          </header>
-          <div
-            class="result-body"
-            :class="{ blurred: isBlurred(item.id) }"
-            @click="reveal(item.id)"
-          >
-            <p class="content">{{ item.contentText }}</p>
-            <details v-if="item.contentJson">
-              <summary>原始数据</summary>
-              <pre>{{ item.contentJson }}</pre>
-            </details>
-            <span v-if="isBlurred(item.id)" class="blur-hint">点击查看翻译</span>
+          <div v-if="topic.results.length" class="blur-toggle">
+            <button class="link-btn" @click="toggleAll">
+              {{ allRevealed ? '隐藏全部翻译' : '显示全部翻译' }}
+            </button>
           </div>
-        </article>
-      </section>
 
-      <div v-else class="state">暂无翻译结果</div>
+          <section v-if="topic.results.length" class="results">
+            <article v-for="item in topic.results" :key="item.id" class="result-card">
+              <header>
+                <span v-if="item.provider" class="provider">{{ item.provider }}</span>
+                <span v-else class="provider-fallback">翻译结果</span>
+                <span class="time">{{ item.updatedAt }}</span>
+              </header>
+              <div
+                class="result-body"
+                :class="{ blurred: isBlurred(item.id) }"
+                @click="reveal(item.id)"
+              >
+                <p class="content">{{ item.contentText }}</p>
+                <details v-if="item.contentJson">
+                  <summary>原始数据</summary>
+                  <pre>{{ item.contentJson }}</pre>
+                </details>
+                <span v-if="isBlurred(item.id)" class="blur-hint">点击查看翻译</span>
+              </div>
+            </article>
+          </section>
 
-      <nav class="pager">
-        <button class="btn ghost" :disabled="!prevAvailable" @click="go('prev')">← 上一个</button>
-        <button class="btn primary" :disabled="!nextAvailable" @click="go('next')">下一个 →</button>
-      </nav>
-      <p class="hint">键盘 ← / → 也可以切换</p>
+          <div v-else class="state">暂无翻译结果</div>
+
+          <nav class="pager">
+            <button class="btn ghost" :disabled="!prevAvailable" @click="go('prev')">← 上一个</button>
+            <button class="btn primary" :disabled="!nextAvailable" @click="go('next')">下一个 →</button>
+          </nav>
+          <p class="hint">键盘 ← / → 也可以切换</p>
+        </div>
+
+        <aside class="similar-panel">
+          <div class="similar-head">
+            <span class="similar-title">
+              相似词
+              <span class="similar-count">{{ similarTopics.length }}</span>
+            </span>
+            <button class="similar-add" @click="similarPickerOpen = true">＋ 关联</button>
+          </div>
+
+          <ul v-if="similarTopics.length" class="similar-list">
+            <li v-for="item in similarTopics" :key="item.id" class="similar-item">
+              <div class="similar-row" @click="toggleSimilar(item.id)">
+                <span class="similar-word">{{ item.sourceText }}</span>
+                <span class="similar-chev">{{ expandedSimilar[item.id] ? '▴' : '▾' }}</span>
+                <button
+                  class="similar-del"
+                  title="解除关联"
+                  @click.stop="unlinkSimilar(item)"
+                >×</button>
+              </div>
+              <p v-if="expandedSimilar[item.id]" class="similar-preview">
+                {{ item.preview || '暂无译文' }}
+              </p>
+            </li>
+          </ul>
+          <p v-else class="similar-empty">暂无相似词，点「关联」添加</p>
+        </aside>
+      </div>
     </template>
 
     <CollectionsPickerDialog
       :open="pickerOpen"
       :collections="collections"
-      message="勾选要收藏到的收藏夹（不会从原有收藏夹移除）"
-      confirm-text="收藏"
+      :selected-ids="currentCollectionIds"
+      message="已在勾选的收藏夹中；取消勾选会取消收藏，也可以在下方新建收藏夹"
+      confirm-text="保存"
       @confirm="doCollectTo"
+      @refresh="loadCollections"
       @cancel="pickerOpen = false"
+    />
+
+    <SimilarPickerDialog
+      :open="similarPickerOpen"
+      :current-id="topic ? topic.id : null"
+      :linked-ids="similarTopics.map((s) => s.id)"
+      @confirm="doAddSimilar"
+      @cancel="similarPickerOpen = false"
     />
 
     <ConfirmDialog
@@ -102,14 +150,19 @@ import { useRoute, useRouter } from 'vue-router'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CollectionsPickerDialog from '../components/CollectionsPickerDialog.vue'
 import MoveMenu from '../components/MoveMenu.vue'
+import SimilarPickerDialog from '../components/SimilarPickerDialog.vue'
 import {
+  addSimilarTopics,
   addToCollections,
   deleteTopic,
   fetchCollections,
+  fetchSimilarTopics,
   fetchTopicDetail,
   fetchTopicNext,
   fetchTopicPrev,
   moveTopic,
+  removeFromCollections,
+  removeSimilarTopic,
 } from '../api'
 
 const route = useRoute()
@@ -127,12 +180,20 @@ const collections = ref([])
 const revealed = ref({})
 const deleteConfirm = ref(false)
 const pickerOpen = ref(false)
+const similarPickerOpen = ref(false)
+const similarTopics = ref([])
+// 相似词译文默认收起，key 为相似词 id
+const expandedSimilar = ref({})
 
 const toast = ref('')
 let toastTimer = null
 
 const nextAvailable = computed(() => nextInfo.value?.available === true)
 const prevAvailable = computed(() => prevInfo.value?.available === true)
+// 当前单词已在的收藏夹，用于弹窗预勾选
+const currentCollectionIds = computed(
+  () => (topic.value ? topic.value.collections.map((c) => c.id) : [])
+)
 const allRevealed = computed(
   () => topic.value?.results.length > 0
     && topic.value.results.every((item) => isBlurred(item.id) === false)
@@ -182,8 +243,46 @@ async function load() {
     loading.value = false
   }
   if (topic.value) {
+    loadSimilar()
     prefetch('next')
     prefetch('prev')
+  }
+}
+
+async function loadSimilar() {
+  expandedSimilar.value = {}
+  try {
+    similarTopics.value = await fetchSimilarTopics(id.value)
+  } catch {
+    /* 相似词加载失败不阻塞详情 */
+    similarTopics.value = []
+  }
+}
+
+function toggleSimilar(similarId) {
+  expandedSimilar.value = {
+    ...expandedSimilar.value,
+    [similarId]: !expandedSimilar.value[similarId],
+  }
+}
+
+async function doAddSimilar(similarIds) {
+  similarPickerOpen.value = false
+  try {
+    similarTopics.value = await addSimilarTopics(id.value, similarIds)
+    showToast(`已关联 ${similarIds.length} 个相似词`)
+  } catch (e) {
+    showToast(e.message)
+  }
+}
+
+async function unlinkSimilar(item) {
+  try {
+    similarTopics.value = await removeSimilarTopic(id.value, item.id)
+    expandedSimilar.value = { ...expandedSimilar.value, [item.id]: false }
+    showToast('已解除关联')
+  } catch (e) {
+    showToast(e.message)
   }
 }
 
@@ -231,18 +330,30 @@ async function moveTo(collection) {
   try {
     const updated = await moveTopic(id.value, collection.id)
     topic.value = updated
+    // 移动会改变各收藏夹的单词计数，刷新侧栏数据
+    await loadCollections()
     showToast(`已移动到「${collection.name}」`)
   } catch (e) {
     showToast(e.message)
   }
 }
 
-async function doCollectTo(collectionIds) {
+async function doCollectTo(payload) {
   pickerOpen.value = false
   try {
-    const updated = await addToCollections(id.value, collectionIds)
-    topic.value = updated
-    showToast('已收藏到所选收藏夹')
+    if (payload.added.length) {
+      await addToCollections(id.value, payload.added)
+    }
+    if (payload.removed.length) {
+      await removeFromCollections(id.value, payload.removed)
+    }
+    if (!payload.added.length && !payload.removed.length) {
+      return
+    }
+    // 重新拉取：单词的收藏夹徽章和各收藏夹计数都要更新
+    topic.value = await fetchTopicDetail(id.value)
+    await loadCollections()
+    showToast('已更新收藏')
   } catch (e) {
     showToast(e.message)
   }
@@ -301,6 +412,37 @@ onUnmounted(() => {
   background: var(--accent-soft);
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pager-btn {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.pager-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pager-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -317,6 +459,144 @@ onUnmounted(() => {
 .del-btn:hover {
   color: var(--danger);
   background: #fee2e2;
+}
+
+/* 主列保持页面原有的居中宽度，相似词面板定位到内容列右侧的空白区 */
+.detail-layout {
+  position: relative;
+}
+
+.detail-main {
+  min-width: 0;
+}
+
+/* ---------- 相似词面板 ---------- */
+
+.similar-panel {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 24px);
+  width: 236px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 12px 8px;
+}
+
+.similar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.similar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.similar-count {
+  font-size: 11px;
+  color: var(--muted);
+  background: #f1f2f4;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 2px;
+}
+
+.similar-add {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.similar-add:hover {
+  background: var(--accent-soft);
+}
+
+.similar-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.similar-item {
+  border-bottom: 1px dashed #eef0f3;
+}
+
+.similar-item:last-child {
+  border-bottom: none;
+}
+
+.similar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 2px;
+  cursor: pointer;
+  border-radius: 7px;
+}
+
+.similar-row:hover {
+  background: #f7f8fa;
+}
+
+.similar-word {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.similar-chev {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.similar-del {
+  font-size: 14px;
+  color: var(--muted);
+  width: 20px;
+  line-height: 1;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.similar-item:hover .similar-del {
+  opacity: 1;
+}
+
+.similar-del:hover {
+  color: var(--danger);
+  background: #fee2e2;
+}
+
+.similar-preview {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  padding: 0 2px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.similar-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 14px 2px;
+  line-height: 1.6;
 }
 
 .detail-card {
@@ -535,5 +815,20 @@ pre {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
+}
+
+/* 视口不够宽时（内容列右侧放不下面板），改为堆叠到内容下方 */
+@media (max-width: 1260px) {
+  .similar-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    margin-top: 16px;
+  }
+
+  .similar-del {
+    opacity: 1;
+  }
 }
 </style>

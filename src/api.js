@@ -37,10 +37,11 @@ export function fetchTopicList({
   keyword = '',
   collectionId = null,
   sourceLangs = [],
+  excludeIds = [],
 } = {}) {
   return request(
     '/topics/list',
-    jsonBody('POST', { page, size, keyword, collectionId, sourceLangs })
+    jsonBody('POST', { page, size, keyword, collectionId, sourceLangs, excludeIds })
   )
 }
 
@@ -76,13 +77,38 @@ export function addToCollections(id, collectionIds) {
   return request(`/topics/${id}/collections`, jsonBody('POST', { collectionIds }))
 }
 
+/** 从多个收藏夹取消收藏：只减不增 */
+export function removeFromCollections(id, collectionIds) {
+  return request(`/topics/${id}/collections/remove`, jsonBody('POST', { collectionIds }))
+}
+
 export function deleteTopic(id) {
   return request(`/topics/${id}`, { method: 'DELETE' })
+}
+
+/** 某个词的相似词列表 */
+export function fetchSimilarTopics(id) {
+  return request(`/topics/${id}/similar`)
+}
+
+/** 建立相似词关联（无向、幂等），返回最新相似词列表 */
+export function addSimilarTopics(id, similarTopicIds) {
+  return request(`/topics/${id}/similar`, jsonBody('POST', { similarTopicIds }))
+}
+
+/** 解除相似词关联，返回最新相似词列表 */
+export function removeSimilarTopic(id, similarId) {
+  return request(`/topics/${id}/similar/${similarId}`, { method: 'DELETE' })
 }
 
 /** 批量收藏到多个收藏夹（只增不减） */
 export function batchAddToCollections(topicIds, collectionIds) {
   return request('/topics/batch/collections', jsonBody('POST', { topicIds, collectionIds }))
+}
+
+/** 批量从多个收藏夹取消收藏（只减不增） */
+export function batchRemoveFromCollections(topicIds, collectionIds) {
+  return request('/topics/batch/collections/remove', jsonBody('POST', { topicIds, collectionIds }))
 }
 
 /** 批量移动到指定收藏夹（覆盖归属） */

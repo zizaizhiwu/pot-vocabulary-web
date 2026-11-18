@@ -3,14 +3,17 @@
     <aside class="sidebar">
       <div class="side-title">收藏夹</div>
 
-      <button
-        class="side-item"
-        :class="{ active: selectedCollectionId === null }"
-        @click="selectCollection(null)"
-      >
-        <span class="side-name">全部</span>
-        <span class="side-count">{{ totalAll }}</span>
-      </button>
+      <div class="side-row">
+        <button
+          class="side-item"
+          :class="{ active: selectedCollectionId === null }"
+          @click="selectCollection(null)"
+        >
+          <span class="side-name">全部</span>
+          <span class="side-count">{{ totalAll }}</span>
+        </button>
+        <span class="side-del-ghost" aria-hidden="true">×</span>
+      </div>
 
       <div
         v-for="c in collections"
@@ -35,6 +38,7 @@
           title="删除收藏夹"
           @click.stop="askDeleteCollection(c)"
         >×</button>
+        <span v-else class="side-del-ghost" aria-hidden="true">×</span>
       </div>
 
       <form v-if="adding" class="side-add" @submit.prevent="submitCollection">
@@ -61,7 +65,7 @@
           <input
             v-model="keyword"
             type="search"
-            placeholder="搜索单词或句子…"
+            placeholder="搜索单词、句子或译文…"
             @search.prevent="search"
           />
           <button v-if="submitted" type="button" class="btn ghost" @click="reset">重置</button>
@@ -194,8 +198,10 @@
       :open="picker.open"
       :collections="collections"
       :message="picker.message"
-      confirm-text="收藏"
+      :selected-ids="picker.selectedIds"
+      confirm-text="保存"
       @confirm="doBatchCollect"
+      @refresh="loadCollections"
       @cancel="picker.open = false"
     />
 
@@ -215,6 +221,7 @@ import {
   batchAddToCollections,
   batchDeleteTopics,
   batchMoveTopics,
+  batchRemoveFromCollections,
   createCollection,
   deleteCollection,
   deleteTopic,
@@ -253,7 +260,7 @@ const allSelected = computed(
   () => records.value.length > 0 && records.value.every((item) => selectedMap.value[item.id])
 )
 
-const picker = ref({ open: false, message: '' })
+const picker = ref({ open: false, message: '', selectedIds: [] })
 const pickerTopicIds = ref([])
 
 const confirmState = ref({
@@ -430,7 +437,8 @@ function openBatchCollect() {
   pickerTopicIds.value = selectedIds()
   picker.value = {
     open: true,
-    message: `把选中的 ${selectedCount.value} 个单词收藏到勾选的收藏夹（不会从原有收藏夹移除）`,
+    message: `为选中的 ${selectedCount.value} 个单词勾选收藏夹（批量操作不预勾选，新增勾选即收藏）`,
+    selectedIds: [],
   }
 }
 
@@ -438,16 +446,28 @@ function openSingleCollect(topic) {
   pickerTopicIds.value = [topic.id]
   picker.value = {
     open: true,
-    message: `把「${topic.sourceText}」收藏到勾选的收藏夹（不会从原有收藏夹移除）`,
+    message: `「${topic.sourceText}」已在勾选的收藏夹中；取消勾选会取消收藏`,
+    selectedIds: topic.collections.map((c) => c.id),
   }
 }
 
-async function doBatchCollect(collectionIds) {
+async function doBatchCollect(payload) {
   const ids = pickerTopicIds.value
-  picker.value = { open: false, message: '' }
+  picker.value = { open: false, message: '', selectedIds: [] }
   try {
-    await batchAddToCollections(ids, collectionIds)
-    showToast(ids.length > 1 ? `已收藏 ${ids.length} 个单词` : '已收藏')
+    if (payload.added.length) {
+      await batchAddToCollections(ids, payload.added)
+    }
+    if (payload.removed.length) {
+      await batchRemoveFromCollections(ids, payload.removed)
+    }
+    if (payload.added.length && payload.removed.length) {
+      showToast('已更新收藏')
+    } else if (payload.removed.length) {
+      showToast('已取消收藏')
+    } else {
+      showToast(ids.length > 1 ? `已收藏 ${ids.length} 个单词` : '已收藏')
+    }
     clearSelection()
     await Promise.all([load(), loadCollections()])
   } catch (e) {
@@ -687,6 +707,8 @@ onMounted(() => {
 
 .side-count {
   flex-shrink: 0;
+  min-width: 20px;
+  text-align: center;
   font-size: 12px;
   color: var(--muted);
   background: #f1f2f4;
@@ -700,13 +722,19 @@ onMounted(() => {
   background: #dde3ff;
 }
 
-.side-del {
+.side-del,
+.side-del-ghost {
   flex-shrink: 0;
   width: 22px;
   color: var(--muted);
   font-size: 15px;
   border-radius: 7px;
   margin-right: 2px;
+}
+
+/* 占位：让没有删除按钮的行也保留同样的右侧空间，保证收藏夹数字对齐 */
+.side-del-ghost {
+  visibility: hidden;
 }
 
 .side-del:hover {
